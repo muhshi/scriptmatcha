@@ -1,4 +1,4 @@
-# Ground Check Automation
+# MatchaIn GC (Matcha Input Gak Culun)
 
 Aplikasi otomatisasi untuk melakukan upload data Ground Check (GC) ke server BPS menggunakan kombinasi Selenium (untuk otentikasi) dan Requests (untuk pengiriman data cepat).
 
@@ -31,10 +31,10 @@ Double-click file **`run.bat`**.
 Script ini akan langsung menjalankan aplikasi tanpa melakukan instalasi ulang.
 
 ### 3. Konfigurasi Kredensial & User Agent
-Buka file `.env` dan isi dengan username, password, dan User Agent yang diinginkan:
+Buka file `.env` dan isi dengan username, password, dan User Agent yang diinginkan. Anda bisa mencontoh dari file `.env.example`.
 ```env
-BPS_USERNAME=username.anda
-BPS_PASSWORD=password_anda
+BPS_USERNAME=username_sso
+BPS_PASSWORD=password_sso_anda
 CUSTOM_USER_AGENT=Mozilla/5.0 (Linux; Android 11; Pixel 4 XL Build/RQ3A.210705.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/86.0.4240.198 Mobile Safari/537.36
 ```
 
@@ -66,10 +66,10 @@ Anda bisa menggunakan salah satu dari daftar berikut:
 `Mozilla/5.0 (Linux; Android 4.4.4; Nexus 5 Build/KRT16S; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/30.0.1599.107 Mobile Safari/537.36`
 
 ### 4. Siapkan Data
-Letakkan semua file Excel yang ingin diproses ke dalam folder **`input/`**.
-Aplikasi akan memproses semua file `.xlsx` dan `.xls` yang ada di folder tersebut secara berurutan.
+1.  Letakkan semua file Excel yang ingin diproses ke dalam folder **`input/`**.
+2.  Pastikan format kolom di file Excel Anda sesuai dengan file **`contoh_excel.xlsx`**.
 
-Format kolom wajib di setiap file Excel:
+Kolom wajib di setiap file Excel:
 - `perusahaan_id` (Text/String)
 - `latitude`
 - `longitude`

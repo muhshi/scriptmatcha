@@ -1,5 +1,5 @@
 @echo off
-title Ground Check Automation - RUN
+title MatchaIn GC - RUN
 
 echo [INFO] Mengaktifkan virtual environment...
 call .venv\Scripts\activate

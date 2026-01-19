@@ -48,6 +48,7 @@ DIR_URL = "https://matchapro.web.bps.go.id/dirgc"
 POST_URL = 'https://matchapro.web.bps.go.id/dirgc/konfirmasi-user'
 
 SESSION_FILE = 'session.json'
+DATA_FILE = 'data.xlsx'
 INPUT_DIR = 'input'
 BACKUP_DIR = 'backup'
 
@@ -459,6 +460,9 @@ def process_file(file_path, session, post_headers, gc_token, csrf_token):
 
 def main():
     """Fungsi utama untuk menjalankan scraper."""
+    print("\n" + "="*50)
+    print("   MatchaIn GC (Matcha Input Gak Culun)")
+    print("="*50 + "\n")
     logging.info("Aplikasi dimulai.")
     
     print_validation_rules()

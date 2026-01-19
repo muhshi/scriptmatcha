@@ -15,13 +15,13 @@ __pycache__/
 *.log
 app.log
 
-# Application Data
+# Application Data (Real Data)
 session.json
 gc_token.txt
 data.xlsx
 data_backup.xlsx
 
-# Data Folders
+# Data Folders (Real Data)
 input/
 backup/
 
@@ -34,3 +34,7 @@ backup/
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# --- EXCEPTIONS (File yang BOLEH masuk Git) ---
+!contoh_excel.xlsx
+!.env.example

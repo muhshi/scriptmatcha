@@ -1,8 +1,8 @@
 @echo off
-title Ground Check Automation - INSTALL & RUN
+title MatchaIn GC - INSTALL & RUN
 
 echo ===================================================
-echo   GROUND CHECK AUTOMATION - SETUP & RUN
+echo   MatchaIn GC (Matcha Input Gak Culun) - SETUP
 echo ===================================================
 echo.
 
