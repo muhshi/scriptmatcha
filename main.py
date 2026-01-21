@@ -13,11 +13,13 @@ import shutil
 import glob
 from datetime import datetime
 from dotenv import load_dotenv
+import pyotp
 
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
@@ -27,6 +29,9 @@ load_dotenv()
 
 USERNAME = os.getenv("BPS_USERNAME")
 PASSWORD = os.getenv("BPS_PASSWORD")
+OTP_SECRET = os.getenv("BPS_OTP_SECRET")
+# Default True jika tidak ada setting
+USE_SESSION_CACHE = os.getenv("USE_SESSION_CACHE", "true").lower() == "true"
 
 if not USERNAME or not PASSWORD:
     print("ERROR: Kredensial (BPS_USERNAME, BPS_PASSWORD) tidak ditemukan di file .env")
@@ -97,9 +102,13 @@ def save_session_data(driver):
     session_data = None
     if csrf_token:
         session_data = {'cookies': cookies, 'csrf_token': csrf_token}
-        with open(SESSION_FILE, 'w') as f:
-            json.dump(session_data, f)
-        logging.info(f"Sesi berhasil diperbarui dan disimpan di '{SESSION_FILE}'.")
+        
+        if USE_SESSION_CACHE:
+            with open(SESSION_FILE, 'w') as f:
+                json.dump(session_data, f)
+            logging.info(f"Sesi berhasil diperbarui dan disimpan di '{SESSION_FILE}'.")
+        else:
+            logging.info("Sesi diperbarui (Tidak disimpan ke file karena USE_SESSION_CACHE=false).")
     
     return session_data, gc_token
 
@@ -125,7 +134,57 @@ def login_selenium(driver):
     driver.find_element(By.ID, "password").send_keys(PASSWORD)
     driver.find_element(By.XPATH, "//input[@type='submit']").click()
     
-    WebDriverWait(driver, 20).until(EC.url_to_be(DIR_URL))
+    # --- OTP HANDLING ---
+    logging.info("Mengecek kebutuhan OTP...")
+    try:
+        # Cek apakah masuk ke halaman OTP (tunggu max 5 detik)
+        # Asumsi elemen input OTP memiliki id atau name yang mengandung 'token' atau 'otp'
+        otp_field = WebDriverWait(driver, 5).until(
+            EC.presence_of_element_located((By.XPATH, "//input[contains(@name, 'token') or contains(@id, 'token') or contains(@name, 'otp') or contains(@id, 'otp')]"))
+        )
+        logging.info("Halaman OTP terdeteksi!")
+
+        otp_code = None
+        if OTP_SECRET:
+            try:
+                totp = pyotp.TOTP(OTP_SECRET)
+                otp_code = totp.now()
+                logging.info("OTP dihasilkan otomatis dari secret key.")
+            except Exception as e:
+                logging.error(f"Gagal generate OTP: {e}")
+        
+        if not otp_code:
+            print("\n" + "!"*50)
+            print("MASUKKAN KODE OTP SECARA MANUAL!")
+            print("!"*50 + "\n")
+            # Bunyikan beep sistem agar user sadar (opsional, hanya work di beberapa terminal)
+            print('\a') 
+            otp_code = input("Masukkan Kode OTP: ").strip()
+
+        logging.info("Menginput kode OTP...")
+        otp_field.send_keys(otp_code)
+        
+        # Cari tombol submit OTP (biasanya type submit atau button dengan text Sign in/Verifikasi)
+        # Kita coba enter saja di field atau cari tombol
+        try:
+             otp_field.submit()
+        except:
+             try:
+                 driver.find_element(By.XPATH, "//input[@type='submit'] or //button[@type='submit']").click()
+             except:
+                 logging.info("Klik tombol gagal, mencoba tekan ENTER...")
+                 otp_field.send_keys(Keys.ENTER)
+        
+    except Exception as e:
+        # Jika tidak ditemukan elemen OTP atau timeout, asumsikan tidak perlu OTP atau sudah login
+        logging.info(f"Info OTP: {e}")
+
+    logging.info("Menunggu redirect ke halaman utama...")
+    try:
+        WebDriverWait(driver, 60).until(EC.url_contains("dirgc"))
+    except Exception as e:
+        logging.error(f"Gagal login (Timeout). URL terakhir: {driver.current_url}")
+        raise e
     logging.info("Login berhasil.")
 
 def get_authenticated_session_selenium():
@@ -177,6 +236,10 @@ def refresh_gc_token_selenium():
 
 def load_session_from_file():
     """Mencoba memuat sesi dari file."""
+    if not USE_SESSION_CACHE:
+        logging.info("USE_SESSION_CACHE=false, melewati pemuatan sesi dari file.")
+        return None
+
     if os.path.exists(SESSION_FILE):
         logging.info(f"Mencoba memuat sesi dari file '{SESSION_FILE}'...")
         with open(SESSION_FILE, 'r') as f:
@@ -360,7 +423,8 @@ def process_file(file_path, session, post_headers, gc_token, csrf_token):
                     if response.status_code == 200:
                         try:
                             response_json = response.json()
-                            logging.info(f"Response Message: {response_json.get('message', 'No message')}")
+                            msg = response_json.get('message', 'No message')
+                            logging.info(f"Response Message: {msg}")
                             
                             if response_json.get('status') == 'success' and 'new_gc_token' in response_json:
                                 new_token = response_json['new_gc_token']
@@ -369,7 +433,8 @@ def process_file(file_path, session, post_headers, gc_token, csrf_token):
                                 status_akhir = "berhasil"
                                 break 
                             else:
-                                logging.warning("[INFO] Respons tidak mengandung 'new_gc_token' atau status bukan 'success'.")
+                                logging.warning(f"[INFO] Gagal: {msg}")
+                                status_akhir = f"gagal - {msg}"
                                 logging.debug(f"Full Response: {response.text}")
                                 break 
                         except json.JSONDecodeError:
@@ -379,7 +444,9 @@ def process_file(file_path, session, post_headers, gc_token, csrf_token):
                     elif response.status_code == 400:
                         try:
                             response_json = response.json()
-                            if "Token invalid atau sudah terpakai" in response_json.get('message', ''):
+                            msg = response_json.get('message', '')
+                            
+                            if "Token invalid atau sudah terpakai" in msg:
                                 logging.warning("Token invalid. Mencoba refresh token dengan Selenium...")
                                 
                                 session_data, new_gc_token = refresh_gc_token_selenium()
@@ -400,21 +467,25 @@ def process_file(file_path, session, post_headers, gc_token, csrf_token):
                                         continue 
                                     else:
                                         logging.error("Gagal setelah mencoba refresh token.")
+                                        status_akhir = "gagal - Token invalid (max retry)"
                                         break
                                 else:
                                     logging.error("Gagal mendapatkan sesi atau token baru.")
+                                    status_akhir = "gagal - Refresh token error"
                                     break
                             else:
-                                logging.error("Request gagal (400) tapi bukan masalah token invalid.")
-                                logging.error(response.text)
+                                logging.error(f"Request gagal (400): {msg}")
+                                status_akhir = f"gagal - {msg}"
                                 break
                         except:
                             logging.error("Request gagal (400).")
                             logging.error(response.text)
+                            status_akhir = "gagal - 400 Bad Request"
                             break
                     else:
                         logging.error(f"Request gagal dengan status {response.status_code}.")
                         logging.error(response.text)
+                        status_akhir = f"gagal - HTTP {response.status_code}"
                         break
 
                 except requests.exceptions.Timeout:
@@ -467,6 +538,14 @@ def main():
     
     print_validation_rules()
     
+    # Bersihkan sesi lama jika cache dimatikan
+    if not USE_SESSION_CACHE and os.path.exists(SESSION_FILE):
+        try:
+            os.remove(SESSION_FILE)
+            logging.info("Sesi lama dihapus karena USE_SESSION_CACHE=false.")
+        except:
+            pass
+
     input_files = get_input_files()
     if not input_files:
         logging.warning(f"Tidak ada file Excel (.xlsx/.xls) ditemukan di folder '{INPUT_DIR}'.")
