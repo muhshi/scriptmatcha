@@ -137,9 +137,9 @@ def login_selenium(driver):
     # --- OTP HANDLING ---
     logging.info("Mengecek kebutuhan OTP...")
     try:
-        # Cek apakah masuk ke halaman OTP (tunggu max 5 detik)
+        # Cek apakah masuk ke halaman OTP (tunggu max 2 detik saja)
         # Asumsi elemen input OTP memiliki id atau name yang mengandung 'token' atau 'otp'
-        otp_field = WebDriverWait(driver, 5).until(
+        otp_field = WebDriverWait(driver, 2).until(
             EC.presence_of_element_located((By.XPATH, "//input[contains(@name, 'token') or contains(@id, 'token') or contains(@name, 'otp') or contains(@id, 'otp')]"))
         )
         logging.info("Halaman OTP terdeteksi!")
@@ -490,9 +490,11 @@ def process_file(file_path, session, post_headers, gc_token, csrf_token):
 
                 except requests.exceptions.Timeout:
                     logging.error("Request Timeout (30s). Server tidak merespons.")
+                    status_akhir = "gagal - Request timeout"
                     break
                 except Exception as e:
                     logging.error(f"Terjadi kesalahan saat melakukan request: {e}", exc_info=True)
+                    status_akhir = f"gagal - {str(e)[:50]}"
                     break
             
             df.at[index, 'status_upload'] = status_akhir
