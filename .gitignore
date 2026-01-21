@@ -22,15 +22,9 @@ data.xlsx
 data_backup.xlsx
 
 # Data Folders (Real Data)
-# Ignore all contents of input/ and backup/ by default
-input/*
-backup/
-
-# --- EXCEPTIONS (File yang BOLEH masuk Git) ---
-# But keep the example file and the folder structure
+input/
 !input/contoh_excel.xlsx
-# Keep the directories, even if empty
-!input/.gitkeep
+backup/
 !backup/.gitkeep
 
 # IDE Settings

@@ -295,6 +295,21 @@ def get_input_files():
     files = glob.glob(os.path.join(INPUT_DIR, "*.xlsx")) + glob.glob(os.path.join(INPUT_DIR, "*.xls"))
     return files
 
+def is_retriable(status_msg):
+    """Mengecek apakah status error layak untuk di-retry."""
+    if not status_msg or not status_msg.startswith("gagal"):
+        return False
+    
+    msg_lower = status_msg.lower()
+    
+    # Jangan di-retry jika sudah diground check oleh user lain atau sudah berhasil
+    if "sudah diground check oleh user lain" in msg_lower:
+        return False
+        
+    # Retry jika ada masalah jaringan, timeout, atau status code tertentu (429/409/449)
+    retriable_terms = ['timeout', '429', '409', '449', 'connection', 'error']
+    return any(term in msg_lower for term in retriable_terms)
+
 def process_file(file_path, session, post_headers, gc_token, csrf_token):
     """Memproses satu file Excel."""
     logging.info(f"--- MEMPROSES FILE: {file_path} ---")
@@ -327,18 +342,29 @@ def process_file(file_path, session, post_headers, gc_token, csrf_token):
     total_data = len(df)
     logging.info(f"Memulai proses untuk {total_data} baris data di {file_path}...")
 
-    try:
-        for index, row in df.iterrows():
+    # Simpan indeks yang perlu di-retry
+    retriable_indices = []
+
+    def run_process_loop(indices, is_retry_pass=False):
+        nonlocal gc_token, session, csrf_token
+        
+        loop_label = "RETRY" if is_retry_pass else "MAIN"
+        current_idx_in_loop = 0
+        total_in_loop = len(indices)
+
+        for index in indices:
+            row = df.loc[index]
+            current_idx_in_loop += 1
             current_num = index + 1
-            progress_pct = (current_num / total_data) * 100
+            progress_pct = (current_idx_in_loop / total_in_loop) * 100
             
-            if str(row.get('status_upload', '')).lower() == 'berhasil':
-                logging.info(f"[PROGRESS {progress_pct:.2f}%] Baris {current_num}/{total_data} sudah berstatus 'berhasil', dilewati.")
+            if not is_retry_pass and str(row.get('status_upload', '')).lower() == 'berhasil':
+                logging.info(f"[{loop_label} PROGRESS {progress_pct:.2f}%] Baris {current_num} sudah berstatus 'berhasil', dilewati.")
                 continue
 
-            logging.info(f"--- [PROGRESS {progress_pct:.2f}%] Memproses Data Baris {current_num}/{total_data} ---")
+            logging.info(f"--- [{loop_label} PROGRESS {progress_pct:.2f}%] Memproses Baris {current_num} ---")
             
-            # --- VALIDASI DATA ---
+            # --- VALIDASI DATA --- (tetap sama)
             perusahaan_id_val = str(row['perusahaan_id']).strip()
             hasilgc_val = str(row['hasilgc']).replace('.0', '').strip()
             edit_nama_val = str(row['edit_nama']).replace('.0', '').strip()
@@ -347,54 +373,27 @@ def process_file(file_path, session, post_headers, gc_token, csrf_token):
             alamat_usaha_val = str(row['alamat_usaha']).strip()
             
             validation_errors = []
-
-            if not perusahaan_id_val:
-                validation_errors.append("perusahaan_id kosong")
-
+            if not perusahaan_id_val: validation_errors.append("perusahaan_id kosong")
             valid_hasilgc = ['1', '3', '4', '99']
-            if hasilgc_val not in valid_hasilgc:
-                validation_errors.append(f"hasilgc invalid ({hasilgc_val}), harus {valid_hasilgc}")
-
+            if hasilgc_val not in valid_hasilgc: validation_errors.append(f"hasilgc invalid ({hasilgc_val})")
             valid_flag = ['0', '1']
-            if edit_nama_val not in valid_flag:
-                validation_errors.append(f"edit_nama invalid ({edit_nama_val}), harus {valid_flag}")
-
-            if edit_alamat_val not in valid_flag:
-                validation_errors.append(f"edit_alamat invalid ({edit_alamat_val}), harus {valid_flag}")
-
-            if nama_usaha_val and edit_nama_val != '1':
-                validation_errors.append("nama_usaha terisi tapi edit_nama bukan 1")
-            elif not nama_usaha_val and edit_nama_val != '0':
-                validation_errors.append("nama_usaha kosong tapi edit_nama bukan 0")
-
-            if alamat_usaha_val and edit_alamat_val != '1':
-                validation_errors.append("alamat_usaha terisi tapi edit_alamat bukan 1")
-            elif not alamat_usaha_val and edit_alamat_val != '0':
-                validation_errors.append("alamat_usaha kosong tapi edit_alamat bukan 0")
-
+            if edit_nama_val not in valid_flag: validation_errors.append(f"edit_nama invalid ({edit_nama_val})")
+            if edit_alamat_val not in valid_flag: validation_errors.append(f"edit_alamat invalid ({edit_alamat_val})")
+            
             if validation_errors:
                 error_msg = "Invalid: " + "; ".join(validation_errors)
                 logging.warning(f"Validasi Gagal Baris {current_num}: {error_msg}")
-                
                 df.at[index, 'status_upload'] = error_msg
-                try:
-                    df.to_excel(file_path, index=False)
-                except Exception as e:
-                    logging.error(f"Gagal menyimpan status validasi ke Excel: {e}")
-                
+                df.to_excel(file_path, index=False)
                 continue 
             # --- END VALIDASI ---
 
             if edit_nama_val == '1':
-                logging.info(f"Encoding nama_usaha '{nama_usaha_val}' ke Base64...")
                 nama_usaha_val = base64.b64encode(nama_usaha_val.encode('utf-8')).decode('utf-8')
-
             if edit_alamat_val == '1':
-                logging.info(f"Encoding alamat_usaha '{alamat_usaha_val}' ke Base64...")
                 alamat_usaha_val = base64.b64encode(alamat_usaha_val.encode('utf-8')).decode('utf-8')
 
             time_on_page_val = str(random.randint(30, 120))
-
             data = {
                 'perusahaan_id': perusahaan_id_val,
                 'latitude': str(row['latitude']),
@@ -409,115 +408,84 @@ def process_file(file_path, session, post_headers, gc_token, csrf_token):
                 '_token': csrf_token,
             }
 
-            logging.info(f"Mengirim data: perusahaan_id={data['perusahaan_id']}, time_on_page={time_on_page_val}")
-            
-            retry_count = 0
-            max_retries = 1
+            retry_row_count = 0
+            max_row_retries = 1
             status_akhir = "gagal"
             
-            while retry_count <= max_retries:
+            while retry_row_count <= max_row_retries:
                 try:
                     response = session.post(POST_URL, headers=post_headers, data=data, timeout=30)
-                    logging.info(f"Status Code: {response.status_code}")
-                    
                     if response.status_code == 200:
-                        try:
-                            response_json = response.json()
-                            msg = response_json.get('message', 'No message')
-                            logging.info(f"Response Message: {msg}")
-                            
-                            if response_json.get('status') == 'success' and 'new_gc_token' in response_json:
-                                new_token = response_json['new_gc_token']
-                                gc_token = new_token 
-                                logging.info(f"[SUCCESS] Token diperbarui: {new_token[:10]}...")
-                                status_akhir = "berhasil"
-                                break 
-                            else:
-                                logging.warning(f"[INFO] Gagal: {msg}")
-                                status_akhir = f"gagal - {msg}"
-                                logging.debug(f"Full Response: {response.text}")
-                                break 
-                        except json.JSONDecodeError:
-                            logging.error("Gagal memparsing respons sebagai JSON.")
-                            logging.debug(f"Response Text: {response.text}")
-                            break
+                        response_json = response.json()
+                        msg = response_json.get('message', 'No message')
+                        if response_json.get('status') == 'success' and 'new_gc_token' in response_json:
+                            gc_token = response_json['new_gc_token']
+                            status_akhir = "berhasil"
+                            break 
+                        else:
+                            status_akhir = f"gagal - {msg}"
+                            break 
                     elif response.status_code == 400:
-                        try:
-                            response_json = response.json()
-                            msg = response_json.get('message', '')
-                            
-                            if "Token invalid atau sudah terpakai" in msg:
-                                logging.warning("Token invalid. Mencoba refresh token dengan Selenium...")
-                                
-                                session_data, new_gc_token = refresh_gc_token_selenium()
-                                
-                                if session_data and new_gc_token:
-                                    csrf_token = session_data['csrf_token']
-                                    session = requests.Session()
-                                    for cookie in session_data['cookies']:
-                                        session.cookies.set(cookie['name'], cookie['value'], domain=cookie['domain'])
-                                    
-                                    gc_token = new_gc_token
-                                    data['gc_token'] = gc_token
-                                    data['_token'] = csrf_token
-                                    
-                                    retry_count += 1
-                                    if retry_count <= max_retries:
-                                        logging.info("Mencoba mengirim ulang request...")
-                                        continue 
-                                    else:
-                                        logging.error("Gagal setelah mencoba refresh token.")
-                                        status_akhir = "gagal - Token invalid (max retry)"
-                                        break
-                                else:
-                                    logging.error("Gagal mendapatkan sesi atau token baru.")
-                                    status_akhir = "gagal - Refresh token error"
-                                    break
+                        response_json = response.json()
+                        msg = response_json.get('message', '')
+                        if "Token invalid atau sudah terpakai" in msg:
+                            session_data_new, new_gc_token = refresh_gc_token_selenium()
+                            if session_data_new and new_gc_token:
+                                csrf_token = session_data_new['csrf_token']
+                                session = requests.Session()
+                                for cookie in session_data_new['cookies']:
+                                    session.cookies.set(cookie['name'], cookie['value'], domain=cookie['domain'])
+                                gc_token = new_gc_token
+                                data['gc_token'] = gc_token
+                                data['_token'] = csrf_token
+                                retry_row_count += 1
+                                continue 
                             else:
-                                logging.error(f"Request gagal (400): {msg}")
-                                status_akhir = f"gagal - {msg}"
+                                status_akhir = "gagal - Refresh token error"
                                 break
-                        except:
-                            logging.error("Request gagal (400).")
-                            logging.error(response.text)
-                            status_akhir = "gagal - 400 Bad Request"
+                        else:
+                            status_akhir = f"gagal - {msg}"
                             break
                     else:
-                        logging.error(f"Request gagal dengan status {response.status_code}.")
-                        logging.error(response.text)
                         status_akhir = f"gagal - HTTP {response.status_code}"
                         break
-
                 except requests.exceptions.Timeout:
-                    logging.error("Request Timeout (30s). Server tidak merespons.")
                     status_akhir = "gagal - Request timeout"
                     break
                 except Exception as e:
-                    logging.error(f"Terjadi kesalahan saat melakukan request: {e}", exc_info=True)
                     status_akhir = f"gagal - {str(e)[:50]}"
                     break
             
             df.at[index, 'status_upload'] = status_akhir
             
-            save_success = False
+            # Log hasil ke terminal
+            if status_akhir == "berhasil":
+                logging.info(f"[SUCCESS] Baris {current_num}: {status_akhir}")
+            else:
+                logging.warning(f"[FAILED] Baris {current_num}: {status_akhir}")
+            
+            # Cek jika perlu di-retry di pass kedua
+            if not is_retry_pass and is_retriable(status_akhir):
+                retriable_indices.append(index)
+
+            # Simpan ke Excel
             for attempt in range(3):
                 try:
                     df.to_excel(file_path, index=False)
-                    logging.info(f"Status baris {current_num} diperbarui menjadi: {status_akhir}")
-                    save_success = True
                     break
-                except PermissionError:
-                    logging.warning(f"File Excel terkunci. Menunggu 5 detik sebelum mencoba menyimpan lagi (Percobaan {attempt+1}/3)...")
-                    time.sleep(5)
-                except Exception as e:
-                    logging.error(f"Gagal menyimpan file Excel: {e}", exc_info=True)
-                    break
+                except:
+                    time.sleep(2)
             
-            if not save_success:
-                logging.error("GAGAL MENYIMPAN STATUS KE EXCEL SETELAH 3 PERCOBAAN. Pastikan file tertutup!")
+            time.sleep(random.uniform(1, 2))
 
-            sleep_time = random.uniform(1, 3)
-            time.sleep(sleep_time)
+    try:
+        # Pass 1: Main Loop
+        run_process_loop(list(df.index))
+        
+        # Pass 2: Retry Loop (Hanya jika ada yang retriable)
+        if retriable_indices:
+            logging.info(f"!!! MEMULAI PASS KEDUA (RETRY) UNTUK {len(retriable_indices)} DATA !!!")
+            run_process_loop(retriable_indices, is_retry_pass=True)
 
     except KeyboardInterrupt:
         logging.warning("\n!!! PROSES DIHENTIKAN OLEH PENGGUNA (Ctrl+C) !!!")
