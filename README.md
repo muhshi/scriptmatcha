@@ -4,6 +4,8 @@ Aplikasi otomatisasi untuk melakukan upload data Ground Check (GC) ke server BPS
 
 ## Fitur Utama
 - **Otomatisasi Login**: Login otomatis menggunakan akun SSO BPS.
+- **Dukungan OTP**: Mendukung input OTP otomatis (TOTP) atau input manual jika diperlukan.
+- **Penyimpanan Sesi (Caching)**: Menyimpan sesi login ke `session.json` agar tidak perlu login ulang setiap kali aplikasi dijalankan.
 - **Batch Processing**: Memproses semua file Excel (.xlsx/.xls) yang ada di folder `input/`.
 - **Validasi Data**: Memastikan data Excel valid sebelum dikirim.
 - **Smart Retry**: Otomatis memperbarui token jika sesi habis tanpa menghentikan proses.
@@ -35,8 +37,24 @@ Buka file `.env` dan isi dengan username, password, dan User Agent yang diingink
 ```env
 BPS_USERNAME=username_sso
 BPS_PASSWORD=password_sso_anda
-CUSTOM_USER_AGENT=Mozilla/5.0 (Linux; Android 11; Pixel 4 XL Build/RQ3A.210705.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/86.0.4240.198 Mobile Safari/537.36
+BPS_OTP_SECRET=secret_key_otp_anda (opsional)
+USE_SESSION_CACHE=true
+CUSTOM_USER_AGENT=Mozilla/5.0 (Linux; Android 13; itel A666LN Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/143.0.7499.192 Mobile Safari/537.36
 ```
+
+### 4. Detail Fitur OTP & Sesi (Baru!)
+
+#### **A. Manajemen OTP**
+Aplikasi mendukung dua metode pengisian OTP:
+1.  **Otomatis**: Jika Anda mengisi `BPS_OTP_SECRET` di file `.env` dengan *secret key* TOTP Anda, aplikasi akan meng-generate kode OTP secara otomatis.
+2.  **Manual**: Jika `BPS_OTP_SECRET` dikosongkan, aplikasi akan berhenti sejenak dan meminta Anda memasukkan kode OTP di terminal. 
+    > [!TIP]
+    > Jika sistem salah mendeteksi halaman OTP atau Anda merasa tidak perlu memasukkan OTP, cukup tekan **Enter** untuk melewati proses tersebut.
+
+#### **B. Sesi Login (`session.json`)**
+Untuk mempercepat proses, aplikasi akan menyimpan data login Anda (cookies & token) ke dalam file `session.json`.
+-   **`USE_SESSION_CACHE=true`**: Aplikasi akan mencoba menggunakan sesi yang tersimpan. Jika masih valid, aplikasi akan langsung memproses data tanpa membuka browser login.
+-   **`USE_SESSION_CACHE=false`**: Aplikasi akan selalu melakukan login ulang dari awal (gunakan ini jika Anda ingin mengganti akun).
 
 #### Daftar User Agent Android WebView (Referensi)
 Anda bisa menggunakan salah satu dari daftar berikut:

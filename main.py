@@ -159,7 +159,7 @@ def login_selenium(driver):
             print("!"*50 + "\n")
             # Bunyikan beep sistem agar user sadar (opsional, hanya work di beberapa terminal)
             print('\a') 
-            otp_code = input("Masukkan Kode OTP: ").strip()
+            otp_code = input("Masukkan Kode OTP (Enter untuk skip): ").strip()
 
         logging.info("Menginput kode OTP...")
         otp_field.send_keys(otp_code)
@@ -502,7 +502,7 @@ def process_file(file_path, session, post_headers, gc_token, csrf_token):
 def main():
     """Fungsi utama untuk menjalankan scraper."""
     print("\n" + "="*50)
-    print("   MatchaIn GC (Matcha Input Gak Culun)")
+    print("   MatchaIn GC (Matcha Input Gak Culun) - Edited by Muhshi")
     print("="*50 + "\n")
     logging.info("Aplikasi dimulai.")
     
