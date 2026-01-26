@@ -358,8 +358,9 @@ def process_file(file_path, session, post_headers, gc_token, csrf_token):
             current_num = index + 1
             progress_pct = (current_idx_in_loop / total_in_loop) * 100
             
-            if not is_retry_pass and str(row.get('status_upload', '')).lower() == 'berhasil':
-                logging.info(f"[{loop_label} PROGRESS {progress_pct:.2f}%] Baris {current_num} sudah berstatus 'berhasil', dilewati.")
+            status_upload_existing = str(row.get('status_upload', '')).lower()
+            if not is_retry_pass and (status_upload_existing == 'berhasil' or "sudah diground check oleh user lain" in status_upload_existing):
+                logging.info(f"[{loop_label} PROGRESS {progress_pct:.2f}%] Baris {current_num} sudah diproses ({status_upload_existing}), dilewati.")
                 continue
 
             logging.info(f"--- [{loop_label} PROGRESS {progress_pct:.2f}%] Memproses Baris {current_num} ---")
@@ -423,6 +424,11 @@ def process_file(file_path, session, post_headers, gc_token, csrf_token):
                             status_akhir = "berhasil"
                             break 
                         else:
+                            # Cek jika sudah diproses oleh user lain -> anggap berhasil
+                            if "sudah diground check oleh user lain" in msg.lower():
+                                status_akhir = "berhasil"
+                                logging.info(f"Data sudah diproses user lain, dianggap berhasil.")
+                                break
                             status_akhir = f"gagal - {msg}"
                             break 
                     elif response.status_code == 400:
