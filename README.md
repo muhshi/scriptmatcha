@@ -19,43 +19,77 @@ Aplikasi otomatisasi untuk melakukan upload data Ground Check (GC) ke server BPS
 - Google Chrome terinstall.
 - Koneksi Internet.
 
-## Instalasi & Penggunaan
+## Panduan Instalasi & Penggunaan (Untuk Pemula)
 
-### 1. Pertama Kali (Instalasi)
-Double-click file **`install_and_run.bat`**.
-Script ini akan otomatis:
-- Membuat virtual environment (`.venv`).
-- Menginstall semua library yang dibutuhkan.
-- Menjalankan aplikasi.
+Ikuti langkah-langkah di bawah ini untuk menginstall dan menjalankan aplikasi di komputer Anda.
 
-### 2. Penggunaan Sehari-hari
-Double-click file **`run.bat`**.
-Script ini akan langsung menjalankan aplikasi tanpa melakukan instalasi ulang.
+### Langkah 1: Install Python
+Aplikasi ini membutuhkan Python versi 3.8 ke atas.
+1.  Buka web resmi Python: [python.org/downloads](https://www.python.org/downloads/)
+2.  Klik tombol **Download Python 3.x.x**.
+3.  Jalankan file installer yang sudah didownload.
+4.  **PENTING**: Pada jendela instalasi, centang kotak **"Add Python to PATH"** sebelum klik "Install Now".
+    > [!IMPORTANT]
+    > Jika Anda lupa mencentang "Add Python to PATH", aplikasi tidak akan bisa berjalan. Jika sudah terlanjur, silakan install ulang dan pastikan dicentang.
 
-### 3. Konfigurasi Kredensial & User Agent
-Buka file `.env` dan isi dengan username, password, dan User Agent yang diinginkan. Anda bisa mencontoh dari file `.env.example`.
-```env
-BPS_USERNAME=username_sso
-BPS_PASSWORD=password_sso_anda
-BPS_OTP_SECRET=secret_key_otp_anda (opsional)
-USE_SESSION_CACHE=true
-CUSTOM_USER_AGENT=Mozilla/5.0 (Linux; Android 13; itel A666LN Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/143.0.7499.192 Mobile Safari/537.36
-```
+### Langkah 2: Download Project
+Ada dua cara untuk mendownload project ini:
+-   **Cara Mudah (Download ZIP)**:
+    1. Klik tombol hijau **"Code"** di halaman GitHub ini.
+    2. Pilih **"Download ZIP"**.
+    3. Setelah selesai, Extract file ZIP tersebut ke folder pilihan Anda.
+-   **Cara Git**:
+    1. Buka terminal atau Command Prompt.
+    2. Ketik perintah: `git clone https://github.com/muhshi/scriptmatcha.git`
 
-### 4. Detail Fitur OTP & Sesi (Baru!)
+### Langkah 3: Pengaturan File `.env`
+File `.env` digunakan untuk menyimpan username dan password Anda.
+1. Cari file bernama `.env.example`.
+2. Klik kanan, lalu pilih **Rename (Ganti Nama)** menjadi `.env` (hapus akhiran `.example`).
+3. Buka file `.env` tersebut menggunakan Notepad.
+4. Isi bagian `BPS_USERNAME` dan `BPS_PASSWORD` dengan kredensial SSO BPS Anda.
+5. Simpan file (Ctrl+S).
 
-#### **A. Manajemen OTP**
-Aplikasi mendukung dua metode pengisian OTP:
-1.  **Otomatis**: Jika Anda mengisi `BPS_OTP_SECRET` di file `.env` dengan *secret key* TOTP Anda, aplikasi akan meng-generate kode OTP secara otomatis.
-2.  **Manual**: Jika `BPS_OTP_SECRET` dikosongkan, aplikasi akan berhenti sejenak dan meminta Anda memasukkan kode OTP di terminal. 
-    > [!TIP]
-    > Jika sistem salah mendeteksi halaman OTP atau Anda merasa tidak perlu memasukkan OTP, cukup tekan **Enter** untuk melewati proses tersebut.
+### Langkah 4: Instalasi Awal & Menjalankan Aplikasi
+Aplikasi ini sudah dilengkapi dengan script otomatis untuk mempermudah Anda.
 
-#### **B. Sesi Login (`session.json`)**
-Untuk mempercepat proses, aplikasi akan menyimpan data login Anda (cookies & token) ke dalam file `session.json`.
--   **`USE_SESSION_CACHE=true`**: Aplikasi akan mencoba menggunakan sesi yang tersimpan. Jika masih valid, aplikasi akan langsung memproses data tanpa membuka browser login.
--   **`USE_SESSION_CACHE=false`**: Aplikasi akan selalu melakukan login ulang dari awal (gunakan ini jika Anda ingin mengganti akun).
+1.  Buka folder project yang sudah di-extract/clone.
+2.  Cari file bernama **`install_and_run.bat`**.
+3.  Double-click (klik dua kali) file tersebut.
+4.  Jendela Command Prompt akan muncul dan otomatis:
+    - Membuat Virtual Environment (wadah khusus library).
+    - Mendownload library yang dibutuhkan (Requests, Selenium, dll).
+    - Langsung menjalankan aplikasi.
 
+### Penggunaan Selanjutnya
+Setelah instalasi pertama selesai, di kemudian hari Anda cukup double-click file **`run.bat`** untuk menjalankan aplikasi dengan lebih cepat tanpa melakukan instalasi ulang.
+
+---
+
+## Persiapan Data Excel
+Sebelum menjalankan aplikasi, pastikan data Anda sudah siap:
+1.  Buka folder **`input/`**.
+2.  Letakkan file Excel GC Anda di sana.
+3.  Pastikan format kolom sesuai:
+    - `perusahaan_id`, `latitude`, `longitude`, `hasilgc`, `edit_nama`, `edit_alamat`, `nama_usaha`, `alamat_usaha`.
+
+## Aturan Validasi Data (PENTING!)
+Agar proses lancar, pastikan data Excel memenuhi aturan berikut:
+
+1. **hasilgc**: Harus `1` (Aktif), `3` (Tutup Sem.), `4` (Tutup Perm.), atau `99` (Tidak Ditemukan).
+2. **Konsistensi Nama/Alamat**:
+   - Jika `nama_usaha` diisi, `edit_nama` harus `1`. Jika kosong, `edit_nama` harus `0`.
+   - Aturan sama berlaku untuk `alamat_usaha` dan `edit_alamat`.
+3. **Status Skip**: 
+   - Aplikasi akan otomatis melewati (skip) baris yang sudah bertatus **"berhasil"** atau **"sudah diground check oleh user lain"**.
+
+## Troubleshooting
+- **File Excel Terkunci**: Pastikan semua file Excel di folder `input/` **TERTUTUP** saat aplikasi berjalan.
+- **Token Invalid**: Aplikasi akan mencoba login ulang otomatis. Jika gagal terus-menerus, cek koneksi internet atau kredensial di `.env`.
+- **Log**: Cek file `app.log` untuk detail error.
+
+---
+*Daftar User Agent Android WebView bisa dilihat di revisi Git sebelumnya jika diperlukan.*
 #### Daftar User Agent Android WebView (Referensi)
 Anda bisa menggunakan salah satu dari daftar berikut:
 
@@ -82,47 +116,3 @@ Anda bisa menggunakan salah satu dari daftar berikut:
 
 **Android 4.4 KitKat – WebView berbasis Chrome 30**
 `Mozilla/5.0 (Linux; Android 4.4.4; Nexus 5 Build/KRT16S; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/30.0.1599.107 Mobile Safari/537.36`
-
-### 4. Siapkan Data
-1.  Buka folder **`input/`**.
-2.  Letakkan semua file Excel yang ingin Anda proses di dalam folder ini.
-3.  Pastikan format kolom di file Excel Anda sesuai dengan file **`contoh_excel.xlsx`** yang sudah ada di dalamnya.
-
-Kolom wajib di setiap file Excel:
-- `perusahaan_id` (Text/String)
-- `latitude`
-- `longitude`
-- `hasilgc`
-- `edit_nama`
-- `edit_alamat`
-- `nama_usaha`
-- `alamat_usaha`
-
-## Aturan Validasi Data (PENTING!)
-
-Sebelum menjalankan aplikasi, pastikan data Excel Anda memenuhi aturan berikut:
-
-1. **perusahaan_id**: Wajib terisi.
-2. **hasilgc**: Harus salah satu dari angka berikut:
-   - `1`: Aktif
-   - `3`: Tutup Sementara
-   - `4`: Tutup Permanen
-   - `99`: Tidak Ditemukan
-3. **edit_nama**:
-   - `0`: Tidak ada perubahan nama.
-   - `1`: Ada perubahan nama.
-4. **edit_alamat**:
-   - `0`: Tidak ada perubahan alamat.
-   - `1`: Ada perubahan alamat.
-5. **Konsistensi Data**:
-   - Jika `nama_usaha` terisi, maka `edit_nama` **HARUS** `1`.
-   - Jika `nama_usaha` kosong, maka `edit_nama` **HARUS** `0`.
-   - Aturan yang sama berlaku untuk `alamat_usaha` dan `edit_alamat`.
-
-## Troubleshooting
-- **File Excel Terkunci**: Pastikan semua file Excel di folder `input/` **TERTUTUP** saat aplikasi berjalan.
-- **Token Invalid**: Aplikasi akan mencoba login ulang otomatis. Jika gagal terus-menerus, cek koneksi internet atau kredensial di `.env`.
-- **Log**: Cek file `app.log` untuk detail error.
-
----
-*Daftar User Agent Android WebView bisa dilihat di revisi Git sebelumnya jika diperlukan.*
